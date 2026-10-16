@@ -1,154 +1,149 @@
 import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
 
 export default function Scene3D() {
-  const mountRef = useRef(null);
+  const canvasRef = useRef(null);
 
   useEffect(() => {
-    const container = mountRef.current;
-    if (!container) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    // Scene & Camera
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 26;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
 
-    // 1. Outer 3D Geometric Mesh (Icosahedron Wireframe)
-    const outerGeo = new THREE.IcosahedronGeometry(9, 1);
-    const outerMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.12
-    });
-    const outerMesh = new THREE.Mesh(outerGeo, outerMat);
-    scene.add(outerMesh);
-
-    // 2. Inner Core (Octahedron Wireframe)
-    const innerGeo = new THREE.OctahedronGeometry(4.5, 0);
-    const innerMat = new THREE.MeshBasicMaterial({
-      color: 0x818cf8,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.22
-    });
-    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
-    scene.add(innerMesh);
-
-    // 3. Floating 3D Starfield / Particle Lattice
-    const particleCount = 850;
-    const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const velocities = [];
-
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 85;
-      positions[i + 1] = (Math.random() - 0.5) * 85;
-      positions[i + 2] = (Math.random() - 0.5) * 55;
-
-      velocities.push({
-        x: (Math.random() - 0.5) * 0.012,
-        y: (Math.random() - 0.5) * 0.012,
-        z: (Math.random() - 0.5) * 0.012
-      });
-    }
-
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    const particleMat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.35,
-      transparent: true,
-      opacity: 0.45,
-      blending: THREE.AdditiveBlending
-    });
-
-    const particleSystem = new THREE.Points(particleGeo, particleMat);
-    scene.add(particleSystem);
-
-    // Mouse tracking for parallax
-    let mouseX = 0;
-    let mouseY = 0;
-    let targetX = 0;
-    let targetY = 0;
-
-    const onMouseMove = (e) => {
-      mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
-      mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
+    // Mouse coordinates
+    let mouse = {
+      x: width / 2,
+      y: height / 2,
+      targetX: width / 2,
+      targetY: height / 2,
     };
 
-    window.addEventListener('mousemove', onMouseMove, { passive: true });
-
-    const onResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    const handleMouseMove = (e) => {
+      mouse.targetX = e.clientX;
+      mouse.targetY = e.clientY;
     };
 
-    window.addEventListener('resize', onResize);
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
 
-    // Render loop
-    let animId;
-    const clock = new THREE.Clock();
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('resize', handleResize);
 
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      const delta = clock.getElapsedTime();
+    // Create subtle particles / star dust
+    const particleCount = 65;
+    const particles = Array.from({ length: particleCount }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: (Math.random() - 0.5) * 0.25,
+      radius: Math.random() * 1.2 + 0.5,
+      alpha: Math.random() * 0.3 + 0.1,
+    }));
 
-      // Smooth camera interpolation
-      targetX += (mouseX - targetX) * 0.04;
-      targetY += (mouseY - targetY) * 0.04;
-      camera.position.x = targetX * 14;
-      camera.position.y = -targetY * 14;
-      camera.lookAt(scene.position);
+    // Scanning laser line
+    let scanY = 0;
 
-      // Rotate 3D meshes
-      outerMesh.rotation.x = delta * 0.07;
-      outerMesh.rotation.y = delta * 0.11;
+    const render = () => {
+      // Smooth mouse lerp
+      mouse.x += (mouse.targetX - mouse.x) * 0.05;
+      mouse.y += (mouse.targetY - mouse.y) * 0.05;
 
-      innerMesh.rotation.x = -delta * 0.14;
-      innerMesh.rotation.y = -delta * 0.18;
+      ctx.clearRect(0, 0, width, height);
 
-      // Particle positions update
-      const pos = particleGeo.attributes.position.array;
-      for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        pos[i3] += velocities[i].x;
-        pos[i3 + 1] += velocities[i].y;
-        pos[i3 + 2] += velocities[i].z;
+      // 1. Mouse Spotlight over precision grid
+      const gradient = ctx.createRadialGradient(
+        mouse.x,
+        mouse.y,
+        0,
+        mouse.x,
+        mouse.y,
+        450
+      );
+      gradient.addColorStop(0, 'rgba(56, 189, 248, 0.045)');
+      gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.015)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-        if (Math.abs(pos[i3]) > 42) velocities[i].x *= -1;
-        if (Math.abs(pos[i3 + 1]) > 42) velocities[i].y *= -1;
-        if (Math.abs(pos[i3 + 2]) > 28) velocities[i].z *= -1;
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      // 2. Precision Subtle Grid
+      const gridSize = 48;
+      ctx.lineWidth = 1;
+
+      for (let x = 0; x < width; x += gridSize) {
+        const dist = Math.abs(x - mouse.x);
+        const opacity = Math.max(0.015, 0.06 - dist / 2500);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
       }
-      particleGeo.attributes.position.needsUpdate = true;
 
-      renderer.render(scene, camera);
+      for (let y = 0; y < height; y += gridSize) {
+        const dist = Math.abs(y - mouse.y);
+        const opacity = Math.max(0.015, 0.06 - dist / 2500);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      // 3. Ambient Drifting Micro Particles (No globe!)
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        // Mouse repulsion
+        const dx = p.x - mouse.x;
+        const dy = p.y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 120) {
+          p.x += (dx / dist) * 1.5;
+          p.y += (dy / dist) * 1.5;
+        }
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 4. Subtle Laser Scan line
+      scanY = (scanY + 0.6) % height;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.04)';
+      ctx.beginPath();
+      ctx.moveTo(0, scanY);
+      ctx.lineTo(width, scanY);
+      ctx.stroke();
+
+      animationFrameId = requestAnimationFrame(render);
     };
 
-    animate();
+    render();
 
     return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('resize', onResize);
-      if (container && renderer.domElement) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
   return (
-    <div
-      ref={mountRef}
-      className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none z-0 bg-[#020204]"
       aria-hidden="true"
     />
   );

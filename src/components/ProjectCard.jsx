@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ExternalLink, Layers, ArrowUpRight } from 'lucide-react';
+import ScrambleText from './ScrambleText';
+import { playHoverSound, playClickSound } from '../utils/audio';
 
 export default function ProjectCard({ project, onSelect }) {
   const cardRef = useRef(null);
@@ -15,8 +17,8 @@ export default function ProjectCard({ project, onSelect }) {
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const rotateX = ((y - centerY) / centerY) * -8;
-    const rotateY = ((x - centerX) / centerX) * 8;
+    const rotateX = ((y - centerY) / centerY) * -7;
+    const rotateY = ((x - centerX) / centerX) * 7;
 
     setCoords({ x: (x / rect.width) * 100, y: (y / rect.height) * 100 });
     setTilt({ rotateX, rotateY });
@@ -31,12 +33,16 @@ export default function ProjectCard({ project, onSelect }) {
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      onClick={() => onSelect(project)}
+      onMouseEnter={playHoverSound}
+      onClick={() => {
+        playClickSound();
+        onSelect(project);
+      }}
       style={{
         transform: `perspective(1000px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
         transition: 'transform 0.15s ease-out, border-color 0.2s, box-shadow 0.2s'
       }}
-      className="group relative rounded-2xl bg-[#0b0b12]/80 border border-white/10 hover:border-white/25 p-7 flex flex-col justify-between cursor-pointer overflow-hidden backdrop-blur-xl shadow-xl hover:shadow-2xl hover:shadow-sky-500/5"
+      className="group relative rounded-2xl bg-[#0b0b12]/90 border border-white/10 hover:border-white/25 p-7 flex flex-col justify-between cursor-pointer overflow-hidden backdrop-blur-xl shadow-xl hover:shadow-2xl hover:shadow-sky-500/5"
     >
       {/* Dynamic Proximity Spotlight */}
       <div
@@ -57,8 +63,8 @@ export default function ProjectCard({ project, onSelect }) {
           </span>
         </div>
 
-        <h3 className="font-display text-2xl font-bold text-white group-hover:text-sky-300 transition-colors tracking-tight">
-          {project.title}
+        <h3 className="font-display text-2xl font-bold text-white group-hover:text-sky-300 transition-colors tracking-tight mb-1">
+          <ScrambleText text={project.title} />
         </h3>
         <p className="text-xs font-mono text-zinc-400 mb-3">{project.subtitle}</p>
 
@@ -87,7 +93,7 @@ export default function ProjectCard({ project, onSelect }) {
         </div>
 
         <button className="flex items-center gap-1 text-xs font-semibold text-white group-hover:text-sky-400 transition-colors">
-          <span>Details</span>
+          <span>Inspect Architecture</span>
           <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
         </button>
       </div>
